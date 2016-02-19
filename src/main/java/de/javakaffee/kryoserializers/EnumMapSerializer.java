@@ -50,6 +50,18 @@ public class EnumMapSerializer extends Serializer<EnumMap<? extends Enum<?>, ?>>
     // https://groups.google.com/d/msg/kryo-users/Eu5V4bxCfws/k-8UQ22y59AJ
     private static final Object FAKE_REFERENCE = new Object();
 
+    @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public EnumMap<? extends Enum<?>, ?> copy(final Kryo kryo, final EnumMap<? extends Enum<?>, ?> original) {
+        // Make a shallow copy to copy the private key type of the original map without using reflection.
+        // This will work for empty original maps as well.
+        final EnumMap copy = new EnumMap(original);
+        for (final Map.Entry entry : original.entrySet()) {
+            copy.put((Enum)entry.getKey(), kryo.copy(entry.getValue()));
+        }
+        return copy;
+    }	
+
     @SuppressWarnings( { "unchecked", "rawtypes" } )
     private EnumMap<? extends Enum<?>, ?> create(final Kryo kryo, final Input input,
         final Class<EnumMap<? extends Enum<?>, ?>> type) {

@@ -72,12 +72,21 @@ public class SubListSerializers {
     }
 
     /**
+     * Adds appropriate sublist serializers as default serializers.
+     */
+    public static Kryo addDefaultSerializers(Kryo kryo) {
+        ArrayListSubListSerializer.addDefaultSerializer(kryo);
+        JavaUtilSubListSerializer.addDefaultSerializer(kryo);
+        return kryo;
+    }
+
+    /**
      * Supports sublists created via {@link ArrayList#subList(int, int)} since java7 (oracle jdk,
      * represented by <code>java.util.ArrayList$SubList</code>).
      */
     public static class ArrayListSubListSerializer extends Serializer<List<?>> {
 
-        private static final Class<?> SUBLIST_CLASS = SubListSerializers.getClassOrNull("java.util.ArrayList$SubList");
+        public static final Class<?> SUBLIST_CLASS = SubListSerializers.getClassOrNull("java.util.ArrayList$SubList");
 
         private Field _parentField;
         private Field _parentOffsetField;
@@ -108,6 +117,11 @@ public class SubListSerializers {
             return SUBLIST_CLASS != null && SUBLIST_CLASS.isAssignableFrom(type);
         }
 
+        public static Kryo addDefaultSerializer(Kryo kryo) {
+            if(SUBLIST_CLASS != null) kryo.addDefaultSerializer(SUBLIST_CLASS, new ArrayListSubListSerializer());
+            return kryo;
+        }
+
         @Override
         public List<?> read(final Kryo kryo, final Input input, final Class<List<?>> clazz) {
             kryo.reference(FAKE_REFERENCE);
@@ -134,6 +148,20 @@ public class SubListSerializers {
                 throw new RuntimeException(e);
             }
         }
+
+        @Override
+        public List<?> copy(final Kryo kryo, final List<?> original) {
+            kryo.reference(FAKE_REFERENCE);
+            try {
+                final List<?> list = (List<?>) _parentField.get(original);
+                final int parentOffset = _parentOffsetField.getInt( original );
+                final int fromIndex = parentOffset;
+                final int toIndex = fromIndex + _sizeField.getInt( original );
+                return kryo.copy(list).subList(fromIndex, toIndex);
+            } catch(final Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 
     /**
@@ -142,7 +170,7 @@ public class SubListSerializers {
      */
     public static class JavaUtilSubListSerializer extends Serializer<List<?>> {
 
-        private static final Class<?> SUBLIST_CLASS = SubListSerializers.getClassOrNull("java.util.SubList");
+        public static final Class<?> SUBLIST_CLASS = SubListSerializers.getClassOrNull("java.util.SubList");
 
         private Field _listField;
         private Field _offsetField;
@@ -173,6 +201,11 @@ public class SubListSerializers {
             return SUBLIST_CLASS != null && SUBLIST_CLASS.isAssignableFrom(type);
         }
 
+        public static Kryo addDefaultSerializer(Kryo kryo) {
+            if(SUBLIST_CLASS != null) kryo.addDefaultSerializer(SUBLIST_CLASS, new JavaUtilSubListSerializer());
+            return kryo;
+        }
+
         @Override
         public List<?> read(final Kryo kryo, final Input input, final Class<List<?>> clazz) {
             kryo.reference(FAKE_REFERENCE);
@@ -195,6 +228,19 @@ public class SubListSerializers {
                 // handles SerializationException specifically (resizing the buffer)...
                 throw e;
             } catch (final Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public List<?> copy(final Kryo kryo, final List<?> obj) {
+            kryo.reference(FAKE_REFERENCE);
+            try {
+                final List<?> list = (List<?>) _listField.get(obj);
+                final int fromIndex = _offsetField.getInt(obj);
+                final int toIndex = fromIndex + _sizeField.getInt(obj);
+                return kryo.copy(list).subList(fromIndex, toIndex);
+            } catch(final Exception e) {
                 throw new RuntimeException(e);
             }
         }

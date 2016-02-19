@@ -24,9 +24,11 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.URI;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
@@ -44,8 +46,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang.mutable.MutableInt;
 import org.testng.Assert;
@@ -118,6 +122,10 @@ public class KryoTest {
         _kryo.register( Collections.singletonMap( "", "" ).getClass(), new CollectionsSingletonMapSerializer() );
         _kryo.register( BigDecimal.class, new BigDecimalSerializer() );
         _kryo.register( BigInteger.class, new BigIntegerSerializer() );
+        _kryo.register( Pattern.class, new RegexSerializer() );
+        _kryo.register( BitSet.class, new BitSetSerializer() );
+        _kryo.register( URI.class, new URISerializer() );
+        _kryo.register( UUID.class, new UUIDSerializer() );
         _kryo.register( GregorianCalendar.class, new GregorianCalendarSerializer() );
         _kryo.register( InvocationHandler.class, new JdkProxySerializer() );
         UnmodifiableCollectionsSerializer.registerSerializers( _kryo );
@@ -132,10 +140,24 @@ public class KryoTest {
     }
 
     @Test( enabled = true )
+    public void testCopySingletonList() throws Exception {
+        final List<?> obj = Collections.singletonList( "foo" );
+        final List<?> copy = _kryo.copy( obj );
+        assertDeepEquals( copy, obj );
+    }
+
+    @Test( enabled = true )
     public void testSingletonSet() throws Exception {
         final Set<?> obj = Collections.singleton( "foo" );
         final Set<?> deserialized = deserialize( serialize( obj ), obj.getClass() );
         assertDeepEquals( deserialized, obj );
+    }
+
+    @Test( enabled = true )
+    public void testCopySingletonSet() throws Exception {
+        final Set<?> obj = Collections.singleton( "foo" );
+        final Set<?> copy = _kryo.copy( obj );
+        assertDeepEquals( copy, obj );
     }
 
     @Test( enabled = true )
@@ -144,12 +166,26 @@ public class KryoTest {
         final Map<?, ?> deserialized = deserialize( serialize( obj ), obj.getClass() );
         assertDeepEquals( deserialized, obj );
     }
+
+    @Test( enabled = true )
+    public void testCopySingletonMap() throws Exception {
+        final Map<?, ?> obj = Collections.singletonMap( "foo", "bar" );
+        final Map<?, ?> copy = _kryo.copy( obj );
+        assertDeepEquals( copy, obj );
+    }
     
     @Test( enabled = true )
     public void testEnumSet() throws Exception {
         final EnumSet<?> set = EnumSet.allOf( Gender.class );
         final EnumSet<?> deserialized = deserialize( serialize( set ), set.getClass() );
         assertDeepEquals( deserialized, set );
+    }
+    
+    @Test
+    public void testCopyEnumSet() throws Exception {
+        final EnumSet<?> set = EnumSet.allOf( Gender.class );
+        final EnumSet<?> copy = _kryo.copy(set);
+        assertDeepEquals( copy, set );
     }
     
     @Test( enabled = true )
@@ -162,6 +198,15 @@ public class KryoTest {
         @SuppressWarnings( "unchecked" )
         final EnumMap<Gender, String> deserialized = deserialize( serialize( map ), map.getClass() );
         assertDeepEquals( deserialized, map );
+    }
+    
+    @Test
+    public void testCopyEnumMap() throws Exception {
+        final EnumMap<Gender, String> map = new EnumMap<Gender, String>( Gender.class );
+        final String value = "foo";
+        map.put( Gender.FEMALE, value );
+        final EnumMap<Gender,String> copy = _kryo.copy(map);
+        assertDeepEquals( copy, map );
     }
 
     /**
@@ -184,7 +229,6 @@ public class KryoTest {
     @Test( enabled = true )
     public void testGregorianCalendar() throws Exception {
         final Holder<Calendar> cal = new Holder<Calendar>( Calendar.getInstance( Locale.ENGLISH ) );
-        System.out.println( "have size: " + serialize( Calendar.getInstance( Locale.ENGLISH ) ).length );
         @SuppressWarnings( "unchecked" )
         final Holder<Calendar> deserialized = deserialize( serialize( cal ), Holder.class );
         assertDeepEquals( deserialized, cal );
@@ -197,6 +241,36 @@ public class KryoTest {
     }
 
     @Test( enabled = true )
+    public void testCopyGregorianCalendar() throws Exception {
+        final Holder<Calendar> cal = new Holder<Calendar>( Calendar.getInstance( Locale.ENGLISH ) );
+        final Holder<Calendar> copy = _kryo.copy( cal );
+        assertDeepEquals( copy, cal );
+        
+        assertEquals( copy.item.getTimeInMillis(), cal.item.getTimeInMillis() );
+        assertEquals( copy.item.getTimeZone(), cal.item.getTimeZone() );
+        assertEquals( copy.item.getMinimalDaysInFirstWeek(), cal.item.getMinimalDaysInFirstWeek() );
+        assertEquals( copy.item.getFirstDayOfWeek(), cal.item.getFirstDayOfWeek() );
+        assertEquals( copy.item.isLenient(), cal.item.isLenient() );
+    }
+
+    @Test( enabled = true )
+    public void testJavaUtilDate() throws Exception {
+        final Holder<Date> cal = new Holder<Date>( new Date(System.currentTimeMillis()) );
+        @SuppressWarnings( "unchecked" )
+        final Holder<Date> deserialized = deserialize( serialize( cal ), Holder.class );
+        assertDeepEquals( deserialized, cal );
+        assertEquals(deserialized.item.getTime(), cal.item.getTime());
+    }
+
+    @Test( enabled = true )
+    public void testCopyJavaUtilDate() throws Exception {
+        final Holder<Date> cal = new Holder<Date>( new Date(System.currentTimeMillis()) );
+        final Holder<Date> copy = _kryo.copy( cal );
+        assertDeepEquals( copy, cal );
+        assertEquals(copy.item.getTime(), cal.item.getTime());
+    }
+
+    @Test( enabled = true )
     public void testJavaSqlTimestamp() throws Exception {
         final Holder<Timestamp> cal = new Holder<Timestamp>( new Timestamp(System.currentTimeMillis()) );
         @SuppressWarnings( "unchecked" )
@@ -206,21 +280,119 @@ public class KryoTest {
     }
 
     @Test( enabled = true )
+    public void testCopyJavaSqlTimestamp() throws Exception {
+        final Holder<Timestamp> cal = new Holder<Timestamp>( new Timestamp(System.currentTimeMillis()) );
+        final Holder<Timestamp> copy = _kryo.copy( cal );
+        assertDeepEquals( copy, cal );
+        assertEquals( copy.item.getTime(), cal.item.getTime() );
+    }
+
+    @Test(enabled = true)
     public void testJavaSqlDate() throws Exception {
-        final Holder<java.sql.Date> cal = new Holder<java.sql.Date>( new java.sql.Date(System.currentTimeMillis()) );
-        @SuppressWarnings( "unchecked" )
-        final Holder<java.sql.Date> deserialized = deserialize( serialize( cal ), Holder.class );
-        assertDeepEquals( deserialized, cal );
-        assertEquals( deserialized.item.getTime(), cal.item.getTime() );
+        final Holder<java.sql.Date> date = new Holder<java.sql.Date>(new java.sql.Date(System.currentTimeMillis()));
+        @SuppressWarnings("unchecked")
+        final Holder<java.sql.Date> deserialized = deserialize(serialize(date), Holder.class);
+        assertDeepEquals(deserialized, date);
+        assertEquals(deserialized.item.getTime(), date.item.getTime());
+    }
+
+    @Test(enabled = true)
+    public void testCopyJavaSqlDate() throws Exception {
+        final Holder<java.sql.Date> date = new Holder<java.sql.Date>(new java.sql.Date(System.currentTimeMillis()));
+        final Holder<java.sql.Date> copy = _kryo.copy(date);
+        assertDeepEquals(copy, date);
+        assertEquals(copy.item.getTime(), date.item.getTime());
+    }
+
+    @Test(enabled = true)
+    public void testJavaSqlTime() throws Exception {
+        final Holder<java.sql.Time> time = new Holder<java.sql.Time>(new java.sql.Time(System.currentTimeMillis()));
+        @SuppressWarnings("unchecked")
+        final Holder<java.sql.Time> deserialized = deserialize(serialize(time), Holder.class);
+        assertDeepEquals(deserialized, time);
+        assertEquals(deserialized.item.getTime(), time.item.getTime());
+    }
+
+    @Test(enabled = true)
+    public void testCopyJavaSqlTime() throws Exception {
+        final Holder<java.sql.Time> time = new Holder<java.sql.Time>(new java.sql.Time(System.currentTimeMillis()));
+        final Holder<java.sql.Time> copy = _kryo.copy(time);
+        assertDeepEquals(copy, time);
+        assertEquals(copy.item.getTime(), time.item.getTime());
+    }
+
+    @Test(enabled = true)
+    public void testBitSet() throws Exception {
+        final BitSet bitSet = new BitSet(10);
+        bitSet.flip(2);
+        bitSet.flip(4);
+        final Holder<BitSet> holder = new Holder<BitSet>(bitSet);
+        @SuppressWarnings("unchecked")
+        final Holder<BitSet> deserialized = deserialize(serialize(holder), Holder.class);
+        assertDeepEquals(deserialized, holder);
+    }
+
+    @Test(enabled = true)
+    public void testCopyBitSet() throws Exception {
+        final BitSet bitSet = new BitSet(10);
+        bitSet.flip(2);
+        bitSet.flip(4);
+        final BitSet copy = _kryo.copy(bitSet);
+        assertDeepEquals(copy, bitSet);
     }
 
     @Test( enabled = true )
-    public void testJavaUtilDate() throws Exception {
-        final Holder<Date> cal = new Holder<Date>( new Date(System.currentTimeMillis()) );
+    public void testURI() throws Exception {
+        final Holder<URI> uri = new Holder<URI>( new URI("http://www.google.com") );
         @SuppressWarnings( "unchecked" )
-        final Holder<Date> deserialized = deserialize( serialize( cal ), Holder.class );
-        assertDeepEquals( deserialized, cal );
-        assertEquals( deserialized.item.getTime(), cal.item.getTime() );
+        final Holder<URI> deserialized = deserialize( serialize( uri ), Holder.class );
+        assertDeepEquals(deserialized, uri);
+    }
+
+    @Test( enabled = true )
+    public void testCopyURI() throws Exception {
+        final Holder<URI> uri = new Holder<URI>( new URI("http://www.google.com") );
+        final Holder<URI> copy = _kryo.copy( uri );
+        assertDeepEquals(copy, uri);
+    }
+
+    @Test( enabled = true )
+    public void testUUID() throws Exception {
+        final Holder<UUID> uuid = new Holder<UUID>( UUID.randomUUID() );
+        @SuppressWarnings( "unchecked" )
+        final Holder<UUID> deserialized = deserialize( serialize( uuid ), Holder.class );
+        assertDeepEquals( deserialized, uuid );
+    }
+
+    @Test( enabled = true )
+    public void testCopyUUID() throws Exception {
+        final Holder<UUID> uuid = new Holder<UUID>( UUID.randomUUID() );
+        final Holder<UUID> copy = _kryo.copy( uuid );
+        assertDeepEquals( copy, uuid );
+    }
+
+    @Test( enabled = true )
+    public void testRegex() throws Exception {
+        final Holder<Pattern> pattern = new Holder<Pattern>( Pattern.compile("regex") );
+        @SuppressWarnings( "unchecked" )
+        final Holder<Pattern> deserialized = deserialize( serialize( pattern ), Holder.class );
+        assertDeepEquals( deserialized, pattern );
+
+        final Holder<Pattern> patternWithFlags = new Holder<Pattern>( Pattern.compile("\n", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE) );
+        @SuppressWarnings( "unchecked" )
+        final Holder<Pattern> deserializedWithFlags = deserialize( serialize( patternWithFlags ), Holder.class );
+        assertDeepEquals( deserializedWithFlags, patternWithFlags );
+	}
+
+    @Test( enabled = true )
+    public void testCopyRegex() throws Exception {
+        final Holder<Pattern> pattern = new Holder<Pattern>( Pattern.compile("regex") );
+        final Holder<Pattern> copy = _kryo.copy( pattern );
+        assertDeepEquals( copy, pattern );
+
+		final Holder<Pattern> patternWithFlags = new Holder<Pattern>( Pattern.compile("\n", Pattern.MULTILINE | Pattern.CASE_INSENSITIVE) );
+        final Holder<Pattern> copyWithFlags = _kryo.copy( patternWithFlags );
+        assertDeepEquals( copyWithFlags, patternWithFlags );
     }
 
     @Test( enabled = true )
@@ -258,56 +430,56 @@ public class KryoTest {
         Assert.assertEquals( deserialized.getDefaultFractionDigits(), currency.getDefaultFractionDigits() );
     }
     
-    @SuppressWarnings( "unchecked" )
-    @Test( enabled = true )
-    public void testJavaUtilCollectionsUnmodifiableList() throws Exception {
-        final Holder<List<String>> unmodifiableList = new Holder<List<String>>( Collections.unmodifiableList( new ArrayList<String>( Arrays.asList( "foo", "bar" ) ) ) );
-        final Holder<List<String>> deserialized = deserialize( serialize( unmodifiableList ), Holder.class );
-        assertDeepEquals( deserialized, unmodifiableList );
-    }
-    
-    @SuppressWarnings( "unchecked" )
-    @Test( enabled = true )
-    public void testJavaUtilCollectionsUnmodifiableSet() throws Exception {
-        final Set<String> set = Collections.unmodifiableSet( new HashSet<String>( Arrays.asList( "foo", "bar" ) ) );
-        final Set<String> deserialized = deserialize( serialize( set ), set.getClass() );
-        assertDeepEquals( deserialized, set );
-    }
-    
-    @SuppressWarnings( "unchecked" )
-    @Test( enabled = true )
-    public void testJavaUtilCollectionsUnmodifiableMap() throws Exception {
+    @DataProvider
+    public Object[][] unmodifiableCollections() {
         final HashMap<String, String> m = new HashMap<String, String>();
         m.put( "foo", "bar" );
-        final Holder<Map<String, String>> unmodifiableMap = new Holder<Map<String, String>>( Collections.unmodifiableMap( m ) );
-        final Holder<Map<String, String>> deserialized = deserialize( serialize( unmodifiableMap ), Holder.class );
-        assertDeepEquals( deserialized, unmodifiableMap );
+        return new Object[][] {
+            { Collections.unmodifiableList( new ArrayList<String>( Arrays.asList( "foo", "bar" ) ) ) },
+            { Collections.unmodifiableSet( new HashSet<String>( Arrays.asList( "foo", "bar" ) ) ) },
+            { Collections.unmodifiableMap( m ) },
+        };
     }
     
     @SuppressWarnings( "unchecked" )
-    @Test( enabled = true )
-    public void testJavaUtilCollectionsSynchronizedList() throws Exception {
-        final List<String> list = Collections.synchronizedList( new ArrayList<String>( Arrays.asList( "foo", "bar" ) ) );
-        final List<String> deserialized = deserialize( serialize( list ), list.getClass() );
-        assertDeepEquals( deserialized, list );
+    @Test( enabled = true, dataProvider = "unmodifiableCollections" )
+    public void testUnmodifiableCollections( final Object collection ) throws Exception {
+        final Holder<Object> holder = new Holder<Object>( collection );
+        final Holder<Object> deserialized = deserialize( serialize( holder ), Holder.class );
+        assertDeepEquals( deserialized, holder );
     }
     
-    @SuppressWarnings( "unchecked" )
-    @Test( enabled = true )
-    public void testJavaUtilCollectionsSynchronizedSet() throws Exception {
-        final Set<String> set = Collections.synchronizedSet( new HashSet<String>( Arrays.asList( "foo", "bar" ) ) );
-        final Set<String> deserialized = deserialize( serialize( set ), set.getClass() );
-        assertDeepEquals( deserialized, set );
+    @Test( enabled = true, dataProvider = "unmodifiableCollections" )
+    public void testCopyUnmodifiableCollections( final Object collection ) throws Exception {
+        final Holder<Object> unmodifiableCollection = new Holder<Object>( collection );
+        final Holder<Object> copy = _kryo.copy( unmodifiableCollection );
+        assertDeepEquals( copy, unmodifiableCollection );
     }
     
-    @SuppressWarnings( "unchecked" )
-    @Test( enabled = true )
-    public void testJavaUtilCollectionsSynchronizedMap() throws Exception {
+    @DataProvider
+    public Object[][] synchronizedCollections() {
         final HashMap<String, String> m = new HashMap<String, String>();
         m.put( "foo", "bar" );
-        final Map<String, String> map = Collections.synchronizedMap( m );
-        final Map<String, String> deserialized = deserialize( serialize( map ), map.getClass() );
-        assertDeepEquals( deserialized, map );
+        return new Object[][] {
+            { Collections.synchronizedList( new ArrayList<String>( Arrays.asList( "foo", "bar" ) ) ) },
+            { Collections.synchronizedSet( new HashSet<String>( Arrays.asList( "foo", "bar" ) ) ) },
+            { Collections.synchronizedMap( m ) },
+        };
+    }
+    
+    @SuppressWarnings( "unchecked" )
+    @Test( enabled = true, dataProvider = "synchronizedCollections" )
+    public void testSynchronizedCollections( final Object collection ) throws Exception {
+        final Holder<Object> holder = new Holder<Object>( collection );
+        final Holder<Object> deserialized = deserialize( serialize( holder ), Holder.class );
+        assertDeepEquals( deserialized, holder );
+    }
+    
+    @Test( enabled = true, dataProvider = "synchronizedCollections" )
+    public void testCopySynchronizedCollections( final Object collection ) throws Exception {
+        final Holder<Object> synchronizedCollection = new Holder<Object>( collection );
+        final Holder<Object> copy = _kryo.copy( synchronizedCollection );
+        assertDeepEquals( copy, synchronizedCollection );
     }
     
     @SuppressWarnings( "unchecked" )
@@ -318,12 +490,26 @@ public class KryoTest {
         assertDeepEquals( deserialized, emptyList );
     }
     
+    @Test( enabled = true )
+    public void testCopyJavaUtilCollectionsEmptyList() throws Exception {
+        final Holder<List<String>> emptyList = new Holder<List<String>>( Collections.<String>emptyList() );
+        final Holder<List<String>> copy = _kryo.copy( emptyList );
+        assertDeepEquals( copy, emptyList );
+    }
+    
     @SuppressWarnings( "unchecked" )
     @Test( enabled = true )
     public void testJavaUtilCollectionsEmptySet() throws Exception {
         final Holder<Set<String>> emptyList = new Holder<Set<String>>( Collections.<String>emptySet() );
         final Holder<Set<String>> deserialized = deserialize( serialize( emptyList ), Holder.class );
         assertDeepEquals( deserialized, emptyList );
+    }
+
+    @Test( enabled = true )
+    public void testCopyJavaUtilCollectionsEmptySet() throws Exception {
+        final Holder<Set<String>> emptyList = new Holder<Set<String>>( Collections.<String>emptySet() );
+        final Holder<Set<String>> copy = _kryo.copy( emptyList );
+        assertDeepEquals( copy, emptyList );
     }
     
     @SuppressWarnings( "unchecked" )
@@ -332,6 +518,13 @@ public class KryoTest {
         final Holder<Map<String, String>> emptyMap = new Holder<Map<String, String>>( Collections.<String, String>emptyMap() );
         final Holder<Map<String, String>> deserialized = deserialize( serialize( emptyMap ), Holder.class );
         assertDeepEquals( deserialized, emptyMap );
+    }
+
+    @Test( enabled = true )
+    public void testCopyJavaUtilCollectionsEmptyMap() throws Exception {
+        final Holder<Map<String, String>> emptyMap = new Holder<Map<String, String>>( Collections.<String, String>emptyMap() );
+        final Holder<Map<String, String>> copy = _kryo.copy( emptyMap );
+        assertDeepEquals( copy, emptyMap );
     }
     
     @SuppressWarnings( "unchecked" )
@@ -351,6 +544,17 @@ public class KryoTest {
         final Holder<List<String>> deserialized = deserialize( serialize( asListHolder ), Holder.class );
         assertDeepEquals( deserialized, asListHolder );
     }
+
+    @SuppressWarnings( "unchecked" )
+    @Test( enabled = true )
+    public void testJavaUtilArraysAsListBoxedPrimitives() throws Exception {
+        final Integer[] values = { 1, 2 };
+        final List<Integer> list = Arrays.asList(values);
+        @SuppressWarnings("rawtypes")
+        final Holder<List<Integer>> asListHolder = new Holder(list);
+        final Holder<List<Integer>> deserialized = deserialize( serialize( asListHolder ), Holder.class );
+        assertDeepEquals( deserialized, asListHolder );
+    }
     
     @SuppressWarnings( "unchecked" )
     @Test( enabled = true )
@@ -367,6 +571,13 @@ public class KryoTest {
         final Holder<List<Email>> deserialized = deserialize( serialize( asListHolder ), Holder.class );
         assertDeepEquals( deserialized, asListHolder );
     }
+    
+    @Test( enabled = true )
+    public void testCopyJavaUtilArraysAsList() throws Exception {
+        final List<String> list = Arrays.<String> asList("foo", "bar");
+        final List<String> copy = _kryo.copy(list);
+        assertDeepEquals( copy, list );
+    }
 
     @Test( enabled = true )
     public void testJdkProxy() throws Exception {
@@ -374,6 +585,13 @@ public class KryoTest {
         @SuppressWarnings( "unchecked" )
         final Holder<SomeInterface> deserialized = deserialize( serialize( bean ), Holder.class );
         assertDeepEquals( deserialized, bean );
+    }
+
+    @Test( enabled = true )
+    public void testCopyJdkProxy() throws Exception {
+        final Holder<SomeInterface> bean = new Holder<SomeInterface>( TestClasses.createProxy() );
+        final Holder<SomeInterface> copy = _kryo.copy( bean );
+        assertDeepEquals( copy, bean );
     }
 
     @Test( enabled = true )

@@ -25,7 +25,17 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
 /**
- * A kryo {@link Serializer} for {@link Date} and subclasses.
+ * A kryo {@link Serializer} for {@link Date} and subclasses. Must be registered like this:
+ * <code><pre>
+ *  Kryo kryo = new Kryo() {
+ *      public Serializer<?> getDefaultSerializer(final Class clazz) {
+ *          if ( Date.class.isAssignableFrom( type ) ) {
+ *              return new DateSerializer( type );
+ *          }
+ *          return super.getDefaultSerializer( clazz );
+ *      }
+ *  };
+ * </pre></code>
  * 
  * @author <a href="mailto:martin.grotzke@javakaffee.de">Martin Grotzke</a>
  */
@@ -59,6 +69,11 @@ public class DateSerializer extends Serializer<Date> {
     @Override
     public void write(final Kryo kryo, final Output output, final Date obj) {
         output.writeLong(obj.getTime(), true);
+    }
+
+    @Override
+    public Date copy(final Kryo kryo, final Date original) {
+        return (Date) original.clone();
     }
 
 }

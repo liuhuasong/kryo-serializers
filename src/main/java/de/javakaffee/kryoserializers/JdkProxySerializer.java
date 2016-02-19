@@ -35,12 +35,12 @@ public class JdkProxySerializer extends Serializer<Object> {
     public Object read(final Kryo kryo, final Input input, final Class<Object> type) {
         final InvocationHandler invocationHandler = (InvocationHandler) kryo.readClassAndObject( input );
         final Class<?>[] interfaces = kryo.readObject( input, Class[].class );
-        final ClassLoader classLoader = kryo.getClass().getClassLoader(); // TODO: can we do this?
+        final ClassLoader classLoader = kryo.getClassLoader();
         try {
             return Proxy.newProxyInstance( classLoader, interfaces, invocationHandler );
         } catch( final RuntimeException e ) {
             System.err.println( getClass().getName()+ ".read:\n" +
-            		"Could not create proxy using classLoader " + classLoader + "," +
+                    "Could not create proxy using classLoader " + classLoader + "," +
                     " have invocationhandler.classloader: " + invocationHandler.getClass().getClassLoader() +
                     " have contextclassloader: " + Thread.currentThread().getContextClassLoader() );
             throw e;
@@ -51,5 +51,11 @@ public class JdkProxySerializer extends Serializer<Object> {
     public void write(final Kryo kryo, final Output output, final Object obj) {
         kryo.writeClassAndObject( output, Proxy.getInvocationHandler( obj ) );
         kryo.writeObject( output, obj.getClass().getInterfaces() );
+    }
+
+    @Override
+    public Object copy(final Kryo kryo, final Object original) {
+        return Proxy.newProxyInstance( kryo.getClassLoader(), original.getClass().getInterfaces(),
+                Proxy.getInvocationHandler(original) );
     }
 }
